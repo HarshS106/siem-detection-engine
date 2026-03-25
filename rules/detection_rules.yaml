@@ -1,0 +1,136 @@
+# detection_rules.yaml
+# ---------------------
+# MITRE ATT&CK aligned detection rules for the SIEM Detection Rule Engine.
+# Each rule generates a corresponding Splunk SPL query automatically.
+#
+# Rule types: threshold | sequence | field_match | anomaly
+# Severity:   CRITICAL | HIGH | MEDIUM | LOW
+
+rules:
+
+  # ── Credential Access ──────────────────────────────────────────────────────
+
+  - id: RULE-001
+    name: Brute Force Login Attempt
+    type: threshold
+    severity: HIGH
+    event_type: login_failure
+    group_by: source_ip
+    threshold: 5
+    window_seconds: 300
+    mitre_technique: "T1110 — Brute Force"
+    description: >
+      5 or more failed login attempts from the same source IP within 5 minutes.
+      Indicative of credential stuffing, password spraying, or brute force attack.
+    tags: [credential_access, brute_force]
+
+  - id: RULE-002
+    name: Password Spray — Multiple Users Same IP
+    type: threshold
+    severity: HIGH
+    event_type: login_failure
+    group_by: source_ip
+    threshold: 10
+    window_seconds: 600
+    mitre_technique: "T1110.003 — Password Spraying"
+    description: >
+      10+ failed logins from a single IP across multiple accounts in 10 minutes.
+      Classic password spray pattern targeting many accounts with common passwords.
+    tags: [credential_access, password_spray]
+
+  # ── Initial Access ─────────────────────────────────────────────────────────
+
+  - id: RULE-003
+    name: Successful Login After Multiple Failures
+    type: sequence
+    severity: MEDIUM
+    sequence:
+      - login_failure
+      - login_success
+    group_by: user
+    window_seconds: 300
+    mitre_technique: "T1078 — Valid Accounts"
+    description: >
+      A login success immediately following a burst of failures for the same user.
+      May indicate a successful brute force or credential compromise.
+    tags: [initial_access, valid_accounts]
+
+  # ── Privilege Escalation ───────────────────────────────────────────────────
+
+  - id: RULE-004
+    name: Privilege Escalation Followed by Admin Action
+    type: sequence
+    severity: HIGH
+    sequence:
+      - role_assigned
+      - admin_action
+    group_by: user
+    window_seconds: 1800
+    mitre_technique: "T1078.004 — Cloud Accounts"
+    description: >
+      A user receives a new role/group assignment, then immediately performs
+      a sensitive administrative action within 30 minutes.
+    tags: [privilege_escalation, cloud_accounts]
+
+  # ── Defense Evasion ────────────────────────────────────────────────────────
+
+  - id: RULE-005
+    name: MFA Device Disabled
+    type: field_match
+    severity: HIGH
+    field_matches:
+      event_type: mfa_disabled
+    mitre_technique: "T1556 — Modify Authentication Process"
+    description: >
+      MFA was disabled for an account. This is a high-risk configuration change
+      that weakens authentication security and may indicate attacker persistence.
+    tags: [defense_evasion, mfa_bypass]
+
+  # ── Exfiltration ───────────────────────────────────────────────────────────
+
+  - id: RULE-006
+    name: Large Data Download — Bulk Export
+    type: threshold
+    severity: MEDIUM
+    event_type: file_download
+    group_by: user
+    threshold: 50
+    window_seconds: 3600
+    mitre_technique: "T1567 — Exfiltration Over Web Service"
+    description: >
+      A user downloads more than 50 files within an hour. Potential insider threat
+      or compromised account performing bulk data exfiltration.
+    tags: [exfiltration, insider_threat]
+
+  # ── Lateral Movement ───────────────────────────────────────────────────────
+
+  - id: RULE-007
+    name: Sequential System Access — Lateral Movement Pattern
+    type: sequence
+    severity: HIGH
+    sequence:
+      - network_scan
+      - remote_login
+    group_by: source_ip
+    window_seconds: 600
+    mitre_technique: "T1021 — Remote Services"
+    description: >
+      A network scan followed by a remote login from the same IP within 10 minutes.
+      Classic lateral movement pattern: discover then access.
+    tags: [lateral_movement, remote_services]
+
+  # ── Persistence ────────────────────────────────────────────────────────────
+
+  - id: RULE-008
+    name: Service Account Interactive Login
+    type: field_match
+    severity: MEDIUM
+    field_matches:
+      event_type: login_success
+      user: svc-account
+    mitre_technique: "T1078.003 — Local Accounts"
+    description: >
+      A service account performed an interactive login. Service accounts should
+      only be used programmatically; interactive logins suggest misuse or compromise.
+    tags: [persistence, service_account_abuse]
+
